@@ -24,7 +24,24 @@ define('CONFIG_PATH', BASE_PATH . '/config');
 define('STORAGE_PATH', BASE_PATH . '/storage');
 define('PUBLIC_PATH', BASE_PATH . '/public');
 
-// Carregar configurações
+// Carregar autoload do Composer (se existir)
+$composerAutoload = BASE_PATH . '/vendor/autoload.php';
+if (file_exists($composerAutoload)) {
+    require_once $composerAutoload;
+}
+
+// Carregar variáveis de ambiente do arquivo .env (se o phpdotenv estiver disponível)
+if (class_exists('Dotenv\\Dotenv')) {
+    try {
+        $dotenv = Dotenv\Dotenv::createImmutable(BASE_PATH);
+        $dotenv->safeLoad(); // safeLoad não lança se .env não existir
+    } catch (Exception $e) {
+        // não interrompe a execução; variáveis de ambiente podem vir de outro lugar
+        error_log('Dotenv load error: ' . $e->getMessage());
+    }
+}
+
+// Carregar configurações (depois de carregar .env)
 require_once CONFIG_PATH . '/config.php';
 
 // Autoloader simples
@@ -65,6 +82,16 @@ switch ($request) {
     case 'leads/success':
         $controller = new LeadController();
         $controller->success();
+        break;
+    case 'leads/status':
+        $controller = new LeadController();
+        // rota simples que retorna JSON com status do email
+        if (method_exists($controller, 'status')) {
+            $controller->status();
+        } else {
+            http_response_code(404);
+            echo json_encode(['error' => 'not_found']);
+        }
         break;
     
     case 'test':
