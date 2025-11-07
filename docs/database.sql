@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS leads (
     ip_address VARCHAR(45),
     user_agent TEXT,
     status ENUM('novo', 'contatado', 'convertido', 'descartado') DEFAULT 'novo',
+    email_sent TINYINT(1) DEFAULT 0,
     INDEX idx_email (email),
     INDEX idx_data_cadastro (data_cadastro),
     INDEX idx_status (status)
