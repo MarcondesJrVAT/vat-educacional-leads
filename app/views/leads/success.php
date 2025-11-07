@@ -48,7 +48,7 @@
 
             <!-- Mensagem Principal -->
             <p class="text-xl text-gray-600 dark:text-gray-300 mb-6">
-                Obrigado por se cadastrar, <strong><?php echo htmlspecialchars($nome); ?></strong>!
+                Obrigado por se cadastrar, <strong><?php echo htmlspecialchars($nome ?? 'amigo(a)'); ?></strong>!
             </p>
 
             <!-- Card de Informação -->
@@ -63,11 +63,11 @@
                         <div class="flex-shrink-0">
                             <i class="fas fa-paper-plane text-indigo-600 mt-1"></i>
                         </div>
-                        <p class="ml-3 text-gray-700 dark:text-gray-300">
+                        <p id="email-status" class="ml-3 text-gray-700 dark:text-gray-300">
                             <?php if ($emailEnviado): ?>
-                                Enviamos um email para <strong class="text-indigo-600"><?php echo htmlspecialchars($email); ?></strong> com o material gratuito do curso em PDF.
+                                Enviamos um email para <strong class="text-indigo-600"><?php echo htmlspecialchars($email ?? 'o endereço cadastrado'); ?></strong> com o material gratuito do curso em PDF.
                             <?php else: ?>
-                                Houve um problema ao enviar o email. Por favor, entre em contato conosco em <strong><?php echo ADMIN_EMAIL; ?></strong>
+                                Estamos enviando o material para o seu e-mail. Isso pode levar alguns segundos. Se não receber em até alguns minutos, por favor entre em contato conosco em <strong><?php echo ADMIN_EMAIL; ?></strong>
                             <?php endif; ?>
                         </p>
                     </div>
@@ -164,5 +164,50 @@
         <i class="fas fa-moon" id="darkmode-icon"></i>
     </button>
     <script src="/assets/js/darkmode.js"></script>
+    <script>
+            (function() {
+            // Variáveis passadas do PHP
+            var leadId = <?php echo json_encode($leadIdParam ?? null); ?>;
+            var email = <?php echo json_encode($email ?? null); ?>;
+            var emailEnviado = <?php echo ($emailEnviado ? 'true' : 'false'); ?>;
+
+            // Se ainda não enviado, iniciar polling para verificar status (até 10s)
+                if (!emailEnviado && (leadId || email)) {
+                var attempts = 0;
+                var maxAttempts = 20; // aumentar timeout para até 20s
+                var interval = 1000; // ms
+                var timer = setInterval(function() {
+                    attempts++;
+                    var url = '/leads/status';
+                    if (leadId) url += '?lead_id=' + encodeURIComponent(leadId);
+                    else url += '?email=' + encodeURIComponent(email);
+                    fetch(url, { credentials: 'same-origin' })
+                        .then(function(resp) { return resp.json(); })
+                        .then(function(json) {
+                            if (json && json.sent) {
+                                clearInterval(timer);
+                                // Recarregar a página para renderizar a versão com sucesso
+                                window.location.reload();
+                            } else if (attempts >= maxAttempts) {
+                                clearInterval(timer);
+                                // atualizar mensagem para indicar erro e sugerir contato
+                                var statusEl = document.getElementById('email-status');
+                                if (statusEl) {
+                                    statusEl.innerHTML = 'Houve um problema ao enviar o email. Por favor, entre em contato conosco em <strong><?php echo ADMIN_EMAIL; ?></strong>';
+                                }
+                            }
+                        }).catch(function(err) {
+                            clearInterval(timer);
+                        });
+                }, interval);
+            }
+            // Se já está confirmado como enviado, limpar query string para deixar a URL limpa
+            if (emailEnviado) {
+                try {
+                    history.replaceState(null, '', window.location.pathname);
+                } catch (e) {}
+            }
+        })();
+    </script>
 </body>
 </html>

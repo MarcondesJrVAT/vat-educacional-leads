@@ -188,6 +188,20 @@
 
     <!-- Script para máscara de telefone -->
     <script src="/assets/js/form.js"></script>
+    
+    <!-- Overlay de carregamento -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center space-x-4 shadow-lg">
+            <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <div>
+                <p class="font-semibold text-gray-900 dark:text-gray-100">Aguarde, estamos processando seu cadastro...</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300">Você será redirecionado em breve.</p>
+            </div>
+        </div>
+    </div>
     <!-- Script e botão de Dark Mode -->
     <button id="darkmode-toggle" class="fixed bottom-6 left-6 z-50 w-12 h-12 rounded-full bg-gray-900 text-yellow-300 dark:bg-yellow-400 dark:text-gray-900 shadow-lg hover:scale-105 transition flex items-center justify-center" aria-label="Alternar modo escuro">
         <i class="fas fa-moon" id="darkmode-icon"></i>
