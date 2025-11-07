@@ -1,11 +1,14 @@
 <?php
-// SUGESTÃO: namespace App\Services;
+// SUGESTÃO: namespace App.Services;
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 /**
  * Class EmailService
  * Responsável por envio de emails e notificações.
  *
- * @package App\Services
+ * @package App.Services
  */
 class EmailService {
     
@@ -18,61 +21,57 @@ class EmailService {
         $nome = $lead->getNome();
         $email = $lead->getEmail();
         $primeiroNome = explode(' ', $nome)[0];
-        
-        // Criar o conteúdo do email
+
         $subject = 'Obrigado por se cadastrar - Seu material gratuito';
-        
         $htmlMessage = self::getHtmlEmailTemplate($primeiroNome);
         $textMessage = self::getTextEmailTemplate($primeiroNome);
-        
-        // Verificar se o arquivo PDF existe
-        if (!file_exists(PDF_PATH)) {
-            error_log("Arquivo PDF não encontrado: " . PDF_PATH);
-            return self::sendSimpleEmail($email, $subject, $htmlMessage, $textMessage);
+
+        $mail = new PHPMailer(true);
+        try {
+            // Configurar SMTP
+            $mail->isSMTP();
+            $mail->Host = SMTP_HOST;
+            $mail->SMTPAuth = true;
+            $mail->Username = SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+            $mail->SMTPSecure = SMTP_SECURE;
+            $mail->Port = SMTP_PORT;
+
+            // Remetente e destinatário
+            $mail->setFrom(FROM_EMAIL, FROM_NAME);
+            $mail->addAddress($email, $nome);
+            $mail->addReplyTo(FROM_EMAIL, FROM_NAME);
+
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body = $htmlMessage;
+            $mail->AltBody = $textMessage;
+
+            if (file_exists(PDF_PATH)) {
+                $mail->addAttachment(PDF_PATH, PDF_NAME);
+            }
+
+            $mail->send();
+
+            // Log no banco (se possível)
+            try {
+                $leadId = method_exists($lead, 'getId') ? $lead->getId() : null;
+                self::logEmailToDb($leadId, $email, $subject, 'enviado', null);
+            } catch (Exception $e) {
+                error_log('EmailService logEmailToDb error: ' . $e->getMessage());
+            }
+
+            return true;
+        } catch (Exception $e) {
+            error_log('PHPMailer error (sendLeadEmail): ' . $e->getMessage());
+            try {
+                $leadId = method_exists($lead, 'getId') ? $lead->getId() : null;
+                self::logEmailToDb($leadId, $email, $subject, 'falhou', $e->getMessage());
+            } catch (Exception $ex) {
+                error_log('EmailService logEmailToDb error: ' . $ex->getMessage());
+            }
+            return false;
         }
-        
-        // Preparar anexo
-        $pdfContent = file_get_contents(PDF_PATH);
-        $pdfEncoded = chunk_split(base64_encode($pdfContent));
-        
-        // Boundary para separar partes do email
-        $boundary = md5(time());
-        
-        // Headers
-        $headers = "From: " . FROM_NAME . " <" . FROM_EMAIL . ">\r\n";
-        $headers .= "Reply-To: " . FROM_EMAIL . "\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
-        
-        // Corpo do email
-        $body = "--{$boundary}\r\n";
-        $body .= "Content-Type: multipart/alternative; boundary=\"alt-{$boundary}\"\r\n\r\n";
-        
-        // Versão texto
-        $body .= "--alt-{$boundary}\r\n";
-        $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        $body .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
-        $body .= $textMessage . "\r\n\r\n";
-        
-        // Versão HTML
-        $body .= "--alt-{$boundary}\r\n";
-        $body .= "Content-Type: text/html; charset=UTF-8\r\n";
-        $body .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
-        $body .= $htmlMessage . "\r\n\r\n";
-        
-        $body .= "--alt-{$boundary}--\r\n\r\n";
-        
-        // Anexo PDF
-        $body .= "--{$boundary}\r\n";
-        $body .= "Content-Type: application/pdf; name=\"" . PDF_NAME . "\"\r\n";
-        $body .= "Content-Transfer-Encoding: base64\r\n";
-        $body .= "Content-Disposition: attachment; filename=\"" . PDF_NAME . "\"\r\n\r\n";
-        $body .= $pdfEncoded . "\r\n";
-        
-        $body .= "--{$boundary}--";
-        
-        // Enviar email
-        return mail($email, $subject, $body, $headers);
     }
     
     /**
@@ -84,22 +83,44 @@ class EmailService {
      * @return bool
      */
     private static function sendSimpleEmail($email, $subject, $htmlMessage, $textMessage) {
-        $boundary = md5(time());
-        
-        $headers = "From: " . FROM_NAME . " <" . FROM_EMAIL . ">\r\n";
-        $headers .= "Reply-To: " . FROM_EMAIL . "\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n";
-        
-        $body = "--{$boundary}\r\n";
-        $body .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n";
-        $body .= $textMessage . "\r\n\r\n";
-        $body .= "--{$boundary}\r\n";
-        $body .= "Content-Type: text/html; charset=UTF-8\r\n\r\n";
-        $body .= $htmlMessage . "\r\n\r\n";
-        $body .= "--{$boundary}--";
-        
-        return mail($email, $subject, $body, $headers);
+        // Fallback usando PHPMailer em modo SMTP
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host = SMTP_HOST;
+            $mail->SMTPAuth = true;
+            $mail->Username = SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+            $mail->SMTPSecure = SMTP_SECURE;
+            $mail->Port = SMTP_PORT;
+
+            $mail->setFrom(FROM_EMAIL, FROM_NAME);
+            $mail->addAddress($email);
+            $mail->addReplyTo(FROM_EMAIL, FROM_NAME);
+
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body = $htmlMessage;
+            $mail->AltBody = $textMessage;
+
+            $mail->send();
+
+            try {
+                self::logEmailToDb(null, $email, $subject, 'enviado', null);
+            } catch (Exception $e) {
+                error_log('EmailService logEmailToDb error: ' . $e->getMessage());
+            }
+
+            return true;
+        } catch (Exception $e) {
+            error_log('PHPMailer error (sendSimpleEmail): ' . $e->getMessage());
+            try {
+                self::logEmailToDb(null, $email, $subject, 'falhou', $e->getMessage());
+            } catch (Exception $ex) {
+                error_log('EmailService logEmailToDb error: ' . $ex->getMessage());
+            }
+            return false;
+        }
     }
     
     /**
@@ -109,19 +130,94 @@ class EmailService {
      */
     public static function sendAdminNotification($lead) {
         $subject = 'Novo Lead Cadastrado - ' . SITE_NAME;
-        
+
         $message = "Um novo lead foi cadastrado!\n\n";
         $message .= "Nome: " . $lead->getNome() . "\n";
         $message .= "Email: " . $lead->getEmail() . "\n";
         $message .= "Telefone: " . $lead->getTelefone() . "\n";
         $message .= "Descrição: " . $lead->getDescricao() . "\n\n";
         $message .= "Data: " . date('d/m/Y H:i:s') . "\n";
-        
-        $headers = "From: " . FROM_EMAIL . "\r\n";
-        $headers .= "Reply-To: " . $lead->getEmail() . "\r\n";
-        
-        return mail(ADMIN_EMAIL, $subject, $message, $headers);
+
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host = SMTP_HOST;
+            $mail->SMTPAuth = true;
+            $mail->Username = SMTP_USERNAME;
+            $mail->Password = SMTP_PASSWORD;
+            $mail->SMTPSecure = SMTP_SECURE;
+            $mail->Port = SMTP_PORT;
+
+            $mail->setFrom(FROM_EMAIL, FROM_NAME);
+            $mail->addAddress(ADMIN_EMAIL);
+            $mail->addReplyTo($lead->getEmail(), $lead->getNome());
+
+            $mail->isHTML(false);
+            $mail->Subject = $subject;
+            $mail->Body = $message;
+
+            $mail->send();
+                try {
+                    $leadId = method_exists($lead, 'getId') ? $lead->getId() : null;
+                    self::logEmailToDb($leadId, ADMIN_EMAIL, $subject, 'enviado', null);
+                } catch (Exception $e) {
+                    error_log('EmailService logEmailToDb error: ' . $e->getMessage());
+                }
+                return true;
+        } catch (Exception $e) {
+            error_log('PHPMailer error (sendAdminNotification): ' . $e->getMessage());
+                try {
+                    $leadId = method_exists($lead, 'getId') ? $lead->getId() : null;
+                    self::logEmailToDb($leadId, ADMIN_EMAIL, $subject, 'falhou', $e->getMessage());
+                } catch (Exception $ex) {
+                    error_log('EmailService logEmailToDb error: ' . $ex->getMessage());
+                }
+            return false;
+        }
     }
+
+        /**
+         * Registra um log de email na tabela `email_logs` quando possível.
+         * @param int|null $leadId
+         * @param string $email_destinatario
+         * @param string $assunto
+         * @param string $status 'enviado'|'falhou'
+         * @param string|null $erro
+         */
+        private static function logEmailToDb($leadId, $email_destinatario, $assunto, $status, $erro = null) {
+            if (!defined('SAVE_TO_DATABASE') || !SAVE_TO_DATABASE) return;
+            try {
+                $pdo = new PDO(
+                    "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME,
+                    DB_USER,
+                    DB_PASS
+                );
+                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+                $sql = "INSERT INTO email_logs (lead_id, email_destinatario, assunto, status, data_envio, erro) VALUES (:lead_id, :email_destinatario, :assunto, :status, :data_envio, :erro)";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute([
+                    ':lead_id' => $leadId,
+                    ':email_destinatario' => $email_destinatario,
+                    ':assunto' => substr($assunto, 0, 255),
+                    ':status' => $status,
+                    ':data_envio' => date('Y-m-d H:i:s'),
+                    ':erro' => $erro
+                ]);
+                // Se o email foi enviado com sucesso, marcar lead.email_sent = 1 quando leadId estiver presente
+                if ($status === 'enviado' && $leadId) {
+                    try {
+                        $sql2 = "UPDATE leads SET email_sent = 1 WHERE id = :lead_id";
+                        $stmt2 = $pdo->prepare($sql2);
+                        $stmt2->execute([':lead_id' => $leadId]);
+                    } catch (PDOException $ex) {
+                        error_log('logEmailToDb update lead email_sent error: ' . $ex->getMessage());
+                    }
+                }
+            } catch (PDOException $e) {
+                error_log('logEmailToDb PDO error: ' . $e->getMessage());
+            }
+        }
     
     /**
      * Retorna template HTML do email.

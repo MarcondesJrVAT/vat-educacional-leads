@@ -8,6 +8,7 @@
  * @package App\Models
  */
 class Lead {
+    private $id;
     private $nome;
     private $email;
     private $telefone;
@@ -143,10 +144,52 @@ class Lead {
                 ':data_cadastro' => $this->dataCadastro
             ]);
             
-            return $result;
+            if ($result) {
+                // retornar id inserido para uso posterior e atribuir ao objeto
+                $lastId = $pdo->lastInsertId();
+                $this->id = $lastId;
+                return $lastId;
+            }
+            return false;
         } catch(PDOException $e) {
             $this->logError("Erro ao salvar no banco: " . $e->getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Busca um lead pelo ID e retorna uma instância Lead ou null
+     * @param int $id
+     * @return Lead|null
+     */
+    public static function findById($id) {
+        try {
+            $pdo = new PDO(
+                "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME,
+                DB_USER,
+                DB_PASS
+            );
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+            $sql = "SELECT nome, email, telefone, descricao, data_cadastro FROM leads WHERE id = :id LIMIT 1";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([':id' => $id]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) return null;
+
+            $lead = new Lead();
+            $lead->id = $id;
+            $lead->setNome($row['nome']);
+            $lead->setEmail($row['email']);
+            $lead->setTelefone($row['telefone']);
+            $lead->setDescricao($row['descricao']);
+            $lead->dataCadastro = $row['data_cadastro'];
+            return $lead;
+        } catch(PDOException $e) {
+            // instanciar temporário para logar
+            $tmp = new Lead();
+            $tmp->logError("Erro ao buscar lead por ID: " . $e->getMessage());
+            return null;
         }
     }
     
@@ -172,11 +215,14 @@ class Lead {
     public function getTelefone() { return $this->telefone; }
     public function getDescricao() { return $this->descricao; }
     public function getDataCadastro() { return $this->dataCadastro; }
+    public function getId() { return $this->id; }
     
     // Setters
     public function setNome($nome) { $this->nome = $nome; }
     public function setEmail($email) { $this->email = $email; }
     public function setTelefone($telefone) { $this->telefone = $telefone; }
     public function setDescricao($descricao) { $this->descricao = $descricao; }
+
+    public function setId($id) { $this->id = $id; }
 }
 ?>
