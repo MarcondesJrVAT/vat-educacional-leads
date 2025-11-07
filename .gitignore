@@ -11,6 +11,9 @@ storage/data/leads.csv
 # Configurações sensíveis
 config/config.php
 
+# Ambiente local
+.env
+
 # Node modules
 node_modules/
 
